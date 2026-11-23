@@ -53,10 +53,16 @@ func (s *TelegramBotSender) SendTelegram(ctx context.Context, req NotificationRe
 		targetURL = fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", s.cfg.BotToken)
 	}
 
-	displayMessage := req.Message
-	msgRunes := []rune(req.Message)
+	// Escape HTML first to prevent injection, then truncate escaped runes so expansion cannot exceed Telegram's 4096 limit.
+	escapedMsg := html.EscapeString(req.Message)
+	msgRunes := []rune(escapedMsg)
 	if len(msgRunes) > 3500 {
-		displayMessage = string(msgRunes[:3500]) + "\n\n... (pesan dipotong)"
+		truncated := string(msgRunes[:3500])
+		// Strip incomplete trailing HTML entity if truncated in the middle (e.g. "&am")
+		if lastAmp := strings.LastIndex(truncated, "&"); lastAmp != -1 && !strings.Contains(truncated[lastAmp:], ";") {
+			truncated = truncated[:lastAmp]
+		}
+		escapedMsg = truncated + "\n\n... (pesan dipotong)"
 	}
 
 	msg := fmt.Sprintf(
@@ -68,7 +74,7 @@ func (s *TelegramBotSender) SendTelegram(ctx context.Context, req NotificationRe
 		html.EscapeString(req.Source),
 		html.EscapeString(req.Name),
 		html.EscapeString(req.Email),
-		html.EscapeString(displayMessage),
+		escapedMsg,
 	)
 
 	payload := telegramPayload{

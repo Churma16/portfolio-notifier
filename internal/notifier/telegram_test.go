@@ -101,6 +101,49 @@ func TestTelegramBotSender_SendTelegram_TruncateLongMessage(t *testing.T) {
 	}
 }
 
+func TestTelegramBotSender_SendTelegram_HtmlExpansionTruncation(t *testing.T) {
+	var receivedPayload telegramPayload
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &receivedPayload)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok": true}`))
+	}))
+	defer server.Close()
+
+	sender := NewTelegramBotSender(TelegramConfig{
+		BotToken: "test_bot_token",
+		ChatID:   "123",
+		BaseURL:  server.URL,
+	})
+
+	// 1500 "<" characters expands to 6000 chars when escaped as "&lt;"
+	denseHtmlMsg := strings.Repeat("<", 1500)
+	req := NotificationRequest{
+		Name:    "Coder",
+		Email:   "coder@example.com",
+		Message: denseHtmlMsg,
+	}
+
+	err := sender.SendTelegram(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Telegram sendMessage strict limit is 4096 UTF-8 characters
+	if len([]rune(receivedPayload.Text)) > 4000 {
+		t.Errorf("payload text length %d exceeds safe limit 4000", len([]rune(receivedPayload.Text)))
+	}
+	if !strings.Contains(receivedPayload.Text, "... (pesan dipotong)") {
+		t.Error("expected truncated indicator for HTML-expanded message")
+	}
+	// Verify no broken trailing entity like &l or &am
+	if strings.HasSuffix(strings.TrimSuffix(receivedPayload.Text, "\n\n... (pesan dipotong)"), "&") {
+		t.Error("message should not end with bare '&' entity start")
+	}
+}
+
 func TestTelegramBotSender_SendTelegram_HTTPError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)

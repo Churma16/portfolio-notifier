@@ -174,6 +174,7 @@ func main() {
 	}
 
 	log.Println("[INFO] Waiting for in-flight notifications to complete...")
-	svc.Wait(5 * time.Second)
+	shutdownWait := min(time.Duration(cfg.TimeoutSeconds)*time.Second, 8*time.Second)
+	svc.Wait(shutdownWait)
 	log.Println("[INFO] Server stopped gracefully.")
 }
