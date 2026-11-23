@@ -66,6 +66,24 @@ func TestNotificationRequest_Validate(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "name exceeds max length",
+			req: NotificationRequest{
+				Name:    string(make([]byte, 201)),
+				Email:   "bob@example.com",
+				Message: "Test",
+			},
+			wantErr: true,
+		},
+		{
+			name: "message exceeds max length",
+			req: NotificationRequest{
+				Name:    "Bob",
+				Email:   "bob@example.com",
+				Message: string(make([]byte, 10001)),
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {

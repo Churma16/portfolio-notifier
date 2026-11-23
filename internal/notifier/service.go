@@ -11,6 +11,7 @@ type Service struct {
 	emailSender    EmailSender
 	telegramSender TelegramSender
 	timeout        time.Duration
+	inFlight       sync.WaitGroup
 }
 
 func NewService(emailSender EmailSender, telegramSender TelegramSender, timeout time.Duration) *Service {
@@ -25,7 +26,15 @@ func NewService(emailSender EmailSender, telegramSender TelegramSender, timeout 
 }
 
 func (s *Service) DispatchAsync(req NotificationRequest) {
+	if s.emailSender == nil && s.telegramSender == nil {
+		log.Println("[WARN] No notification dispatchers enabled; notification dropped")
+		return
+	}
+
+	s.inFlight.Add(1)
 	go func() {
+		defer s.inFlight.Done()
+
 		ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
 		defer cancel()
 
@@ -59,4 +68,19 @@ func (s *Service) DispatchAsync(req NotificationRequest) {
 
 		wg.Wait()
 	}()
+}
+
+// Wait blocks until all in-flight background notification dispatches complete or timeout expires.
+func (s *Service) Wait(timeout time.Duration) {
+	c := make(chan struct{})
+	go func() {
+		s.inFlight.Wait()
+		close(c)
+	}()
+
+	select {
+	case <-c:
+	case <-time.After(timeout):
+		log.Println("[WARN] Timed out waiting for in-flight notifications during shutdown")
+	}
 }

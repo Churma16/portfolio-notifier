@@ -54,6 +54,23 @@ func TestSetupRouter_Notify_ValidationFailure(t *testing.T) {
 	}
 }
 
+func TestSetupRouter_Notify_OversizedPayload(t *testing.T) {
+	svc := notifier.NewService(nil, nil, time.Second)
+	router := SetupRouter(svc)
+
+	// Create payload > 64 KB
+	oversizedBody := bytes.Repeat([]byte("A"), 70*1024)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/notify", bytes.NewBuffer(oversizedBody))
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400 for oversized payload, got %d", rec.Code)
+	}
+}
+
 func TestSetupRouter_Notify_Honeypot(t *testing.T) {
 	svc := notifier.NewService(nil, nil, time.Second)
 	router := SetupRouter(svc)

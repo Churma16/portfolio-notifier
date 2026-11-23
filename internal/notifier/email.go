@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -102,7 +103,8 @@ func (s *ResendSender) SendEmail(ctx context.Context, req NotificationRequest) e
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("resend returned non-2xx status code: %d", resp.StatusCode)
+		errSnippet, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return fmt.Errorf("resend returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(errSnippet)))
 	}
 
 	return nil

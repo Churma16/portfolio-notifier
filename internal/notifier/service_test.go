@@ -100,3 +100,31 @@ func TestService_DispatchAsync_HandlesErrorsGracefully(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 }
+
+func TestService_Wait(t *testing.T) {
+	var executed int32
+
+	emailMock := &mockEmailSender{
+		sendFunc: func(ctx context.Context, req NotificationRequest) error {
+			time.Sleep(50 * time.Millisecond)
+			atomic.AddInt32(&executed, 1)
+			return nil
+		},
+	}
+
+	svc := NewService(emailMock, nil, time.Second)
+	svc.DispatchAsync(NotificationRequest{Name: "WaitTest", Email: "w@w.com", Message: "hello"})
+
+	svc.Wait(500 * time.Millisecond)
+
+	if atomic.LoadInt32(&executed) != 1 {
+		t.Errorf("expected background job to finish before Wait returned, got %d", atomic.LoadInt32(&executed))
+	}
+}
+
+func TestService_NoDispatchers(t *testing.T) {
+	svc := NewService(nil, nil, time.Second)
+	// Should not block or panic
+	svc.DispatchAsync(NotificationRequest{Name: "NoOp", Email: "n@n.com", Message: "hello"})
+	svc.Wait(100 * time.Millisecond)
+}

@@ -67,10 +67,44 @@ func TestTelegramBotSender_SendTelegram_MissingCredentials(t *testing.T) {
 	}
 }
 
+func TestTelegramBotSender_SendTelegram_TruncateLongMessage(t *testing.T) {
+	var receivedPayload telegramPayload
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &receivedPayload)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok": true}`))
+	}))
+	defer server.Close()
+
+	sender := NewTelegramBotSender(TelegramConfig{
+		BotToken: "test_bot_token",
+		ChatID:   "123",
+		BaseURL:  server.URL,
+	})
+
+	longMsg := strings.Repeat("A", 4000)
+	req := NotificationRequest{
+		Name:    "Jane",
+		Email:   "jane@example.com",
+		Message: longMsg,
+	}
+
+	err := sender.SendTelegram(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(receivedPayload.Text, "... (pesan dipotong)") {
+		t.Error("expected truncated message indicator in text")
+	}
+}
+
 func TestTelegramBotSender_SendTelegram_HTTPError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		_, _ = w.Write([]byte(`{"ok": false, "description": "Unauthorized"}`))
+		_, _ = w.Write([]byte(`{"ok": false, "description": "Unauthorized token"}`))
 	}))
 	defer server.Close()
 
@@ -83,5 +117,8 @@ func TestTelegramBotSender_SendTelegram_HTTPError(t *testing.T) {
 	err := sender.SendTelegram(context.Background(), NotificationRequest{Name: "A", Email: "a@b.com", Message: "m"})
 	if err == nil {
 		t.Fatal("expected error for 401 status code, got nil")
+	}
+	if !strings.Contains(err.Error(), "Unauthorized token") {
+		t.Errorf("expected error message to contain response snippet, got: %v", err)
 	}
 }

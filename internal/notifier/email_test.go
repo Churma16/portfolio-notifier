@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -67,7 +68,7 @@ func TestResendSender_SendEmail_MissingKey(t *testing.T) {
 func TestResendSender_SendEmail_HTTPError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte(`{"error": "bad request"}`))
+		_, _ = w.Write([]byte(`{"message": "domain unverified"}`))
 	}))
 	defer server.Close()
 
@@ -79,5 +80,8 @@ func TestResendSender_SendEmail_HTTPError(t *testing.T) {
 	err := sender.SendEmail(context.Background(), NotificationRequest{Name: "A", Email: "a@b.com", Message: "m"})
 	if err == nil {
 		t.Fatal("expected error for 400 status code, got nil")
+	}
+	if !strings.Contains(err.Error(), "domain unverified") {
+		t.Errorf("expected error message to contain response snippet, got: %v", err)
 	}
 }

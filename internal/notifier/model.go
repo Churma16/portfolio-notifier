@@ -23,14 +23,23 @@ func (r *NotificationRequest) Validate() error {
 	if r.Name == "" {
 		return errors.New("name is required")
 	}
+	if len(r.Name) > 200 {
+		return errors.New("name exceeds maximum length of 200 characters")
+	}
 	if r.Email == "" {
 		return errors.New("email is required")
+	}
+	if len(r.Email) > 254 {
+		return errors.New("email exceeds maximum length of 254 characters")
 	}
 	if _, err := mail.ParseAddress(r.Email); err != nil {
 		return errors.New("invalid email address")
 	}
 	if r.Message == "" {
 		return errors.New("message is required")
+	}
+	if len(r.Message) > 10000 {
+		return errors.New("message exceeds maximum length of 10000 characters")
 	}
 	if r.Source == "" {
 		r.Source = "unknown"

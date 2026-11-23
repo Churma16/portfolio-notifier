@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -51,6 +53,12 @@ func (s *TelegramBotSender) SendTelegram(ctx context.Context, req NotificationRe
 		targetURL = fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", s.cfg.BotToken)
 	}
 
+	displayMessage := req.Message
+	msgRunes := []rune(req.Message)
+	if len(msgRunes) > 3500 {
+		displayMessage = string(msgRunes[:3500]) + "\n\n... (pesan dipotong)"
+	}
+
 	msg := fmt.Sprintf(
 		"<b>📩 Pesan Baru (churma.codes)</b>\n"+
 			"<b>⚙️ Backend:</b> <code>%s</code>\n"+
@@ -60,7 +68,7 @@ func (s *TelegramBotSender) SendTelegram(ctx context.Context, req NotificationRe
 		html.EscapeString(req.Source),
 		html.EscapeString(req.Name),
 		html.EscapeString(req.Email),
-		html.EscapeString(req.Message),
+		html.EscapeString(displayMessage),
 	)
 
 	payload := telegramPayload{
@@ -87,7 +95,8 @@ func (s *TelegramBotSender) SendTelegram(ctx context.Context, req NotificationRe
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("telegram returned non-2xx status code: %d", resp.StatusCode)
+		errSnippet, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return fmt.Errorf("telegram returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(errSnippet)))
 	}
 
 	return nil

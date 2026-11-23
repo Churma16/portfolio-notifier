@@ -72,16 +72,13 @@ func SetupRouter(svc *notifier.Service) http.Handler {
 	})
 
 	notifyHandler := func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
+		r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
 
 		var req notifier.NotificationRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "Invalid JSON payload"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "Invalid or oversized JSON payload"})
 			return
 		}
 
@@ -175,5 +172,8 @@ func main() {
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Fatalf("[FATAL] Server forced to shutdown: %v", err)
 	}
+
+	log.Println("[INFO] Waiting for in-flight notifications to complete...")
+	svc.Wait(5 * time.Second)
 	log.Println("[INFO] Server stopped gracefully.")
 }
