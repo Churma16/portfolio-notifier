@@ -23,6 +23,9 @@ func (r *NotificationRequest) Validate() error {
 	if r.Name == "" {
 		return errors.New("name is required")
 	}
+	if strings.ContainsAny(r.Name, "\r\n") {
+		return errors.New("name must not contain line breaks")
+	}
 	if len(r.Name) > 200 {
 		return errors.New("name exceeds maximum length of 200 characters")
 	}
@@ -43,6 +46,9 @@ func (r *NotificationRequest) Validate() error {
 	}
 	if r.Source == "" {
 		r.Source = "unknown"
+	}
+	if len(r.Source) > 100 {
+		return errors.New("source exceeds maximum length of 100 characters")
 	}
 	return nil
 }

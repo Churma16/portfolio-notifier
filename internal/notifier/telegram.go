@@ -49,33 +49,39 @@ func (s *TelegramBotSender) SendTelegram(ctx context.Context, req NotificationRe
 	}
 
 	targetURL := s.cfg.BaseURL
-	if targetURL == "" {
-		targetURL = fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", s.cfg.BotToken)
-	}
 
-	// Escape HTML first to prevent injection, then truncate escaped runes so expansion cannot exceed Telegram's 4096 limit.
-	escapedMsg := html.EscapeString(req.Message)
-	msgRunes := []rune(escapedMsg)
-	if len(msgRunes) > 3500 {
-		truncated := string(msgRunes[:3500])
-		// Strip incomplete trailing HTML entity if truncated in the middle (e.g. "&am")
-		if lastAmp := strings.LastIndex(truncated, "&"); lastAmp != -1 && !strings.Contains(truncated[lastAmp:], ";") {
-			truncated = truncated[:lastAmp]
-		}
-		escapedMsg = truncated + "\n\n... (pesan dipotong)"
-	}
-
-	msg := fmt.Sprintf(
+	header := fmt.Sprintf(
 		"<b>📩 Pesan Baru (churma.codes)</b>\n"+
 			"<b>⚙️ Backend:</b> <code>%s</code>\n"+
 			"<b>👤 Pengirim:</b> %s\n"+
 			"<b>📧 Email:</b> %s\n\n"+
-			"<b>💬 Pesan:</b>\n%s",
+			"<b>💬 Pesan:</b>\n",
 		html.EscapeString(req.Source),
 		html.EscapeString(req.Name),
 		html.EscapeString(req.Email),
-		escapedMsg,
 	)
+
+	// Telegram sendMessage strict limit is 4096 UTF-8 runes.
+	// Cap total payload dynamically to max 4000 runes to guarantee safety.
+	const maxTotalRunes = 4000
+	const footer = "\n\n... (pesan dipotong)"
+	availableBudget := maxTotalRunes - len([]rune(header)) - len([]rune(footer))
+	if availableBudget < 200 {
+		availableBudget = 200
+	}
+
+	escapedMsg := html.EscapeString(req.Message)
+	msgRunes := []rune(escapedMsg)
+	if len(msgRunes) > availableBudget {
+		truncated := string(msgRunes[:availableBudget])
+		// Strip incomplete trailing HTML entity if truncated in the middle (e.g. "&am")
+		if lastAmp := strings.LastIndex(truncated, "&"); lastAmp != -1 && !strings.Contains(truncated[lastAmp:], ";") {
+			truncated = truncated[:lastAmp]
+		}
+		escapedMsg = truncated + footer
+	}
+
+	msg := header + escapedMsg
 
 	payload := telegramPayload{
 		ChatID:    s.cfg.ChatID,

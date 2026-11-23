@@ -144,6 +144,47 @@ func TestTelegramBotSender_SendTelegram_HtmlExpansionTruncation(t *testing.T) {
 	}
 }
 
+func TestTelegramBotSender_SendTelegram_ExtremeEscapedMetadata(t *testing.T) {
+	var receivedPayload telegramPayload
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &receivedPayload)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok": true}`))
+	}))
+	defer server.Close()
+
+	sender := NewTelegramBotSender(TelegramConfig{
+		BotToken: "test_bot_token",
+		ChatID:   "123",
+		BaseURL:  server.URL,
+	})
+
+	// 200 '&' characters expand to 1000 chars as '&amp;'
+	extremeName := strings.Repeat("&", 200)
+	req := NotificationRequest{
+		Name:    extremeName,
+		Email:   "extreme@example.com",
+		Message: strings.Repeat("A", 4000),
+		Source:  "laravel",
+	}
+
+	err := sender.SendTelegram(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Must strictly be <= 4000 runes
+	totalRunes := len([]rune(receivedPayload.Text))
+	if totalRunes > 4000 {
+		t.Errorf("total runes %d exceeds 4000 max budget", totalRunes)
+	}
+	if !strings.Contains(receivedPayload.Text, "... (pesan dipotong)") {
+		t.Error("expected message to be truncated")
+	}
+}
+
 func TestTelegramBotSender_SendTelegram_HTTPError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)

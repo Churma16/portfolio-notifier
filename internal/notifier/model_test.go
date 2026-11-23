@@ -76,6 +76,34 @@ func TestNotificationRequest_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "name with newline rejected",
+			req: NotificationRequest{
+				Name:    "John\nDoe",
+				Email:   "john@example.com",
+				Message: "Test",
+			},
+			wantErr: true,
+		},
+		{
+			name: "name with carriage return rejected",
+			req: NotificationRequest{
+				Name:    "John\rDoe",
+				Email:   "john@example.com",
+				Message: "Test",
+			},
+			wantErr: true,
+		},
+		{
+			name: "source exceeds max length",
+			req: NotificationRequest{
+				Name:    "Bob",
+				Email:   "bob@example.com",
+				Message: "Test",
+				Source:  string(make([]byte, 101)),
+			},
+			wantErr: true,
+		},
+		{
 			name: "message exceeds max length",
 			req: NotificationRequest{
 				Name:    "Bob",
