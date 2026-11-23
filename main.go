@@ -59,6 +59,32 @@ func loadConfig() Config {
 	}
 }
 
+type statusResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (w *statusResponseWriter) WriteHeader(code int) {
+	w.statusCode = code
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Filter out frequent health checks to prevent log clutter from container pollers
+		if r.URL.Path == "/health" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		start := time.Now()
+		wrapped := &statusResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+		next.ServeHTTP(wrapped, r)
+
+		log.Printf("[HTTP] %s %s %d (latency: %v)", r.Method, r.URL.Path, wrapped.statusCode, time.Since(start))
+	})
+}
+
 func SetupRouter(svc *notifier.Service) http.Handler {
 	mux := http.NewServeMux()
 
@@ -112,7 +138,7 @@ func SetupRouter(svc *notifier.Service) http.Handler {
 	mux.HandleFunc("POST /api/notify", notifyHandler)
 	mux.HandleFunc("POST /notify", notifyHandler)
 
-	return mux
+	return loggingMiddleware(mux)
 }
 
 func main() {
