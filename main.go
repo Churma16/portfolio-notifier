@@ -23,6 +23,7 @@ type Config struct {
 	TelegramBotToken  string
 	TelegramChatID    string
 	TimeoutSeconds    int
+	MonitorURL        string
 }
 
 func loadConfig() Config {
@@ -48,6 +49,8 @@ func loadConfig() Config {
 		}
 	}
 
+	monitorURL := os.Getenv("MONITOR_URL")
+
 	return Config{
 		Port:             port,
 		ResendAPIKey:     os.Getenv("RESEND_API_KEY"),
@@ -56,6 +59,7 @@ func loadConfig() Config {
 		TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
 		TelegramChatID:   os.Getenv("TELEGRAM_CHAT_ID"),
 		TimeoutSeconds:   timeoutSec,
+		MonitorURL:       monitorURL,
 	}
 }
 
@@ -169,7 +173,13 @@ func main() {
 		log.Printf("[WARN] TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is not set. Telegram delivery is disabled.")
 	}
 
-	svc := notifier.NewService(emailSender, telegramSender, time.Duration(cfg.TimeoutSeconds)*time.Second)
+	if cfg.MonitorURL != "" {
+		log.Printf("[INFO] Telemetry reporting enabled to %s", cfg.MonitorURL)
+	} else {
+		log.Printf("[INFO] MONITOR_URL is empty or unset. Telemetry reporting is disabled.")
+	}
+
+	svc := notifier.NewService(emailSender, telegramSender, time.Duration(cfg.TimeoutSeconds)*time.Second, cfg.MonitorURL)
 	router := SetupRouter(svc)
 
 	srv := &http.Server{
